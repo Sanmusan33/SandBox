@@ -1,0 +1,11 @@
+{
+    "features": [
+        {
+            "id": "octree_visualizer",
+            "name": "Octree Visualizer",
+            "path": "plugins/OctreeVisualizer",
+            "type": "plugin",
+            "enabled": true
+        }
+    ]
+}

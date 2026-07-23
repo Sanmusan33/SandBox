@@ -1,0 +1,10 @@
+{
+    "MetaData": {
+        "Id": "octree_visualizer",
+        "Version": "1.0.0",
+        "Name": "Octree Visualizer",
+        "Description": "2D 俯视八叉树节点分布图，支持拖拽平移、滚轮缩放。",
+        "Author": "SandBox Team",
+        "Category": "Visualization"
+    }
+}
