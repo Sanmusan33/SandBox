@@ -71,3 +71,4 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config/plugins.json ${CMAKE_BINARY_DI
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(SandBoxEditor)
 endif()
+add_subdirectory(PixelCreator)

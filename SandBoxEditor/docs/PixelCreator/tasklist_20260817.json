@@ -1,0 +1,154 @@
+{
+  "task_summary": "在 SandBoxEditor（Qt6 插件架构）中实现完整软件光栅化管线单元（教学演示型，逐像素绘制）：MVP 顶点变换 -> 裁剪/剔除 -> NDC/视口 -> 图元装配 -> 光栅化(点/线/三角形) -> 片元着色 -> 深度测试+合成，并配套教学 UI（单步/慢放/回放/中间结果）。设计文档见 docs/SoftwareRasterPipeline.md。",
+  "created_at": "2026-08-17",
+  "total_tasks": 14,
+  "tasks": [
+    {
+      "id": "T1",
+      "name": "插件工程骨架",
+      "description": "在 plugins/ 下新建 RasterPipelineVisualizer 插件目录：metadata.json（Id: raster_pipeline_visualizer）、CMakeLists.txt（MODULE 库，链接 Qt6::Widgets + CoreLibrary + SandBoxCore）、RasterPlugin 桩类（实现 Plugin 接口，widget() 返回占位 RasterWidget）。在 plugins/CMakeLists.txt 注册 add_subdirectory。",
+      "inputs": "现有插件模板 plugins/OctreeVisualizer/ 全套；core/Plugin.h 接口；core/PluginManager/PluginLoader 注册方式",
+      "outputs": "编译通过；插件可被 PluginManager 识别并激活，显示占位 Widget",
+      "dependencies": [],
+      "estimated_hours": 4,
+      "status": "pending"
+    },
+    {
+      "id": "T2",
+      "name": "轻量数学库 RasterMath",
+      "description": "实现 header-only RasterMath.h：Vec3/Vec4/Mat4（列主序 float[16]），identity/perspective/lookAt/rotationY/transform（v'=M*v），与 GLM/OpenGL 惯例对齐。编写最小单测（矩阵连乘、投影后 w 行为、旋转正交性）。",
+      "inputs": "设计文档 3.1 节；无需第三方依赖",
+      "outputs": "单测通过；RasterMath.h 无外部依赖，纯头文件可被其他任务引用",
+      "dependencies": ["T1"],
+      "estimated_hours": 6,
+      "status": "pending"
+    },
+    {
+      "id": "T3",
+      "name": "帧缓冲 FrameBuffer + TraceBuffer",
+      "description": "FrameBuffer：QImage(RGB888) + QVector<float> 深度缓冲 + writeOrder 计数器；setPixel 经 scanLine 直写（唯一像素入口）、setDepth/at、resize/clear、预留 writeScanline 扩展点。TraceBuffer：record/count/records 记录 (x,y,stageId,primitiveId,order,depth)。",
+      "inputs": "设计文档 2.4 / 2.7 / 3.3 节",
+      "outputs": "像素写入/清除/深度读写/轨迹记录单测通过；setPixel 为唯一写入入口",
+      "dependencies": ["T1"],
+      "estimated_hours": 4,
+      "status": "pending"
+    },
+    {
+      "id": "T4",
+      "name": "数据类型与 Stage 接口",
+      "description": "RasterTypes.h（RasterVertex/PrimitiveType/RasterPrimitive/RasterFragment）；RasterContext.h（顶点池/图元池/矩阵/帧缓冲引用/stepGranularity/stageOutputs 快照）；RasterStage 接口（name/isEnabled/setEnabled/execute）；StepGranularity 枚举（ByStage/ByPrimitive/ByPixel）。",
+      "inputs": "设计文档 2.2 / 2.3 节",
+      "outputs": "编译通过；接口稳定，T5-T12 均基于此接口开发",
+      "dependencies": ["T1"],
+      "estimated_hours": 4,
+      "status": "pending"
+    },
+    {
+      "id": "T5",
+      "name": "S0 顶点变换 + S2 NDC/视口",
+      "description": "VertexTransformStage：v' = v * M * V * P（逐顶点齐次变换，输出裁剪空间顶点并存入 stageOutputs 快照）。ViewportStage：透视除法、NDC->屏幕坐标映射、y 翻转、depth 映射到 [0,1]。",
+      "inputs": "设计文档 3.2 节 S0/S2；RasterMath（T2）；RasterContext（T4）",
+      "outputs": "单测：已知模型坐标经 MVP 后屏幕坐标/深度正确",
+      "dependencies": ["T2", "T4"],
+      "estimated_hours": 6,
+      "status": "pending"
+    },
+    {
+      "id": "T6",
+      "name": "S1 裁剪/剔除（一期）",
+      "description": "ClipStage：背面剔除（屏幕空间叉积 winding，可开关）；近平面裁剪（Sutherland-Hodgman 保留顶点属性插值）；视锥剔除（全顶点同侧整体剔除）。预留 6 面齐次裁剪扩展点。",
+      "inputs": "设计文档 3.2 节 S1；S0/S2 输出（T5）",
+      "outputs": "单测：背面/近平面外/视锥外图元正确剔除；合法图元保留",
+      "dependencies": ["T5"],
+      "estimated_hours": 4,
+      "status": "pending"
+    },
+    {
+      "id": "T7",
+      "name": "S4 点/线段光栅化（可暂停迭代器）",
+      "description": "PointIterator/LineRasterizer：可暂停/续扫状态机，nextFragment 每次产出 1 像素；线段用 Bresenham 整数算法；emitFragment 统一写入 RasterContext。paintEvent 前可查询 pendingCount。",
+      "inputs": "设计文档 2.6 / 3.2 节 S4；FrameBuffer（T3）；S0/S2 输出（T5）",
+      "outputs": "单测：线段像素点集与 Bresenham 参考一致；迭代器可悬挂续跑",
+      "dependencies": ["T3", "T5"],
+      "estimated_hours": 6,
+      "status": "pending"
+    },
+    {
+      "id": "T8",
+      "name": "S4 三角形光栅化",
+      "description": "TriangleRasterizer：包围盒 + 边界函数（像素中心采样）+ 重心坐标权重；内外判定与插值权重复用同一组 edge 计算；逐行/逐像素可暂停迭代；预留 MSAA 子采样扩展点。",
+      "inputs": "设计文档 2.6 / 3.2 节 S4；T7 的迭代器模式",
+      "outputs": "单测：三角形内部像素集合正确、重心权重和为 1、边界像素归属正确",
+      "dependencies": ["T7"],
+      "estimated_hours": 8,
+      "status": "pending"
+    },
+    {
+      "id": "T9",
+      "name": "S5 片元着色",
+      "description": "ShadeStage：Flat（取首顶点色）/ Gouraud（重心坐标插值顶点色）/ Lambert 演示（法线插值后 dot(N,L)）；三种模式可切换，输出着色后 Fragment。",
+      "inputs": "设计文档 3.2 节 S5；三角形光栅化权重输出（T8）",
+      "outputs": "单测：Flat 与 Gouraud 端点/中心颜色值正确",
+      "dependencies": ["T8"],
+      "estimated_hours": 4,
+      "status": "pending"
+    },
+    {
+      "id": "T10",
+      "name": "S6 深度测试 + 合成",
+      "description": "DepthCompositeStage：z-buffer 比较（更近则写入颜色+深度）；教学开关（禁用深度测试演示遮挡错误）；每像素记录 TraceBuffer；支持统计被深度拒绝像素数。",
+      "inputs": "设计文档 3.2 节 S6；FrameBuffer/TraceBuffer（T3）；T8 的 Fragment 流",
+      "outputs": "单测：前后遮挡正确；禁用深度测试后出现覆盖错误（预期行为）",
+      "dependencies": ["T8", "T3"],
+      "estimated_hours": 4,
+      "status": "pending"
+    },
+    {
+      "id": "T11",
+      "name": "DemoScene 教学场景",
+      "description": "实现 4 个教学场景：单三角形（大包围盒逐像素）、线框立方体（12 线段）、旋转立方体（6 面 12 三角形 + 深度测试）、双三角形遮挡（演示深度测试开关）。提供场景切换与旋转角驱动。",
+      "inputs": "设计文档 3.5 节；T5/T7/T9/T10 的 Stage 输出",
+      "outputs": "各场景经 RasterPipeline 渲染后帧缓冲内容正确",
+      "dependencies": ["T5", "T7", "T9", "T10"],
+      "estimated_hours": 4,
+      "status": "pending"
+    },
+    {
+      "id": "T12",
+      "name": "教学 UI 控制",
+      "description": "RasterWidget（被动 Widget，paintEvent 仅 blit 帧缓冲，支持像素放大叠加层）；控制面板：运行/暂停/单步(Stage/图元/像素)/重置/慢放速度滑块/Stage 开关列表；中间结果面板（顶点表/图元表/片段计数）；叠加层（包围盒/扫描线/背面剔除状态）。",
+      "inputs": "设计文档 2.5 / 2.6 节；T11 场景 + RasterContext（T4）",
+      "outputs": "交互走查通过：单步/慢放/暂停/Stage 开关均正确驱动管线",
+      "dependencies": ["T11", "T4"],
+      "estimated_hours": 8,
+      "status": "pending"
+    },
+    {
+      "id": "T13",
+      "name": "TraceBuffer 教学回放",
+      "description": "基于 TraceBuffer 实现：按写入 order 重放前 k 像素、快进/回退到指定像素、回放速度控制；与直接渲染结果对比一致性验证。",
+      "inputs": "设计文档 2.7 节；T12 UI + TraceBuffer（T3）",
+      "outputs": "回放至第 k 像素的帧内容与直接渲染 k 像素时完全一致",
+      "dependencies": ["T12", "T3"],
+      "estimated_hours": 4,
+      "status": "pending"
+    },
+    {
+      "id": "T14",
+      "name": "集成收尾验证",
+      "description": "config/plugins.json 注册新插件；验证加载/卸载/激活/停用全流程；清理调试代码；更新设计文档（标注已实现项与偏差）；全量编译与运行验证。",
+      "inputs": "全部任务产物；config/plugins.json",
+      "outputs": "插件在 SandBoxEditor 中可正常加载运行；文档与实现一致",
+      "dependencies": ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12", "T13"],
+      "estimated_hours": 3,
+      "status": "pending"
+    }
+  ],
+  "knowledge_sources": [
+    "e:/QTProj/SandBox/SandBoxEditor/docs/SoftwareRasterPipeline.md",
+    "e:/QTProj/SandBox/SandBoxEditor/plugins/OctreeVisualizer/ (模板)",
+    "e:/QTProj/SandBox/SandBoxEditor/core/Plugin.h",
+    "e:/QTProj/SandBox/SandBoxEditor/core/PluginManager.h",
+    "e:/QTProj/SandBox/SandBoxEditor/config/plugins.json"
+  ]
+}
