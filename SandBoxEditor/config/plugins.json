@@ -5,7 +5,21 @@
             "name": "Octree Visualizer",
             "path": "plugins/OctreeVisualizer",
             "type": "plugin",
-            "enabled": true
+            "enabled": false
+        },
+        {
+            "id": "pixel_creator",
+            "name": "Pixel Creator",
+            "path": "plugins/PixelCreator",
+            "type": "plugin",
+            "enabled": false
+        },
+        {
+            "id": "pixel_renderer",
+            "name": "Pixel Renderer",
+            "path": "plugins/PixelRenderer",
+            "type": "plugin",
+            "enabled": false
         }
     ]
 }

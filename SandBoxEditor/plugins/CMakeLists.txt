@@ -1,1 +1,3 @@
 add_subdirectory(OctreeVisualizer)
+add_subdirectory(PixelCreator)
+add_subdirectory(PixelRenderer)

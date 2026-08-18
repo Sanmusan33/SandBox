@@ -1,0 +1,10 @@
+{
+    "MetaData": {
+        "Id": "pixel_renderer",
+        "Version": "0.1.0",
+        "Name": "Pixel Renderer",
+        "Description": "基于 OpenGL 逐像素绘制的模拟光栅化管线教学单元。",
+        "Author": "SandBox Team",
+        "Category": "Visualization"
+    }
+}

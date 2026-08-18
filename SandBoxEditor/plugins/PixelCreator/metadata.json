@@ -1,0 +1,10 @@
+{
+    "MetaData": {
+        "Id": "pixel_creator",
+        "Version": "0.1.0",
+        "Name": "Pixel Creator",
+        "Description": "软件光栅化管线教学单元：像素级光栅化管线 + 自由视角相机。",
+        "Author": "SandBox Team",
+        "Category": "Visualization"
+    }
+}

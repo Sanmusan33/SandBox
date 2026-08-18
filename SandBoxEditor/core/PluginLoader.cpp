@@ -17,14 +17,16 @@ void PluginLoader::registerAll(PluginManager* manager)
     // 统一使用 plugins.json
     QString configPath = QDir(QCoreApplication::applicationDirPath()).filePath("plugins.json");
     QFile file(configPath);
-    if (!file.open(QIODevice::ReadOnly)) {
+    if (!file.open(QIODevice::ReadOnly))
+    {
         qWarning() << "Failed to open plugins.json at" << configPath;
         return;
     }
 
     QByteArray data = file.readAll();
     QJsonDocument doc = QJsonDocument::fromJson(data);
-    if (doc.isNull() || !doc.isObject()) {
+    if (doc.isNull() || !doc.isObject())
+    {
         qWarning() << "Invalid plugins.json format";
         return;
     }
@@ -32,68 +34,63 @@ void PluginLoader::registerAll(PluginManager* manager)
     QJsonArray features = doc.object().value("features").toArray();
     qDebug() << "Total features defined in JSON:" << features.size();
 
-    for (const QJsonValue& val : features) {
-        QJsonObject obj = val.toObject();
-        QString relativePath = obj.value("path").toString();
-        QString pluginId = obj.value("id").toString();
-
-        qDebug() << "---------------------------------------";
-        qDebug() << "Processing Plugin ID:" << pluginId;
-
-        QDir baseDir(QCoreApplication::applicationDirPath());
-        qDebug() << "Application Dir:" << baseDir.absolutePath();
-
-        QStringList searchPaths;
-        searchPaths << baseDir.absoluteFilePath(relativePath);
-        searchPaths << baseDir.absoluteFilePath("plugins/" + pluginId);
-        searchPaths << baseDir.absoluteFilePath("plugins");
-        searchPaths << baseDir.absoluteFilePath("plugins/OctreeVisualizer"); // 针对性路径
-
-        bool loaded = false;
-        for (const QString& path : searchPaths) {
-            QDir dir(path);
-            qDebug() << "  Scanning path:" << path << (dir.exists() ? "[EXISTS]" : "[NOT FOUND]");
-            if (!dir.exists()) continue;
-
-            QStringList filters;
+    QDir baseDir(QCoreApplication::applicationDirPath());
+    QStringList filters;
 #ifdef Q_OS_WIN
-            filters << "*.dll";
+    filters << "*.dll";
 #else
-            filters << "*.so" << "*.dylib";
+    filters << "*.so" << "*.dylib";
 #endif
+
+    for (const QJsonValue& val : features)
+    {
+        QJsonObject obj = val.toObject();
+        QString pluginId = obj.value("id").toString();
+        if (pluginId.isEmpty()) continue;
+
+        QString displayName = obj.value("name").toString();
+        QString relativePath = obj.value("path").toString();
+
+        // 搜索路径：优先配置的 path，其次约定目录 plugins/<id>
+        QStringList searchPaths;
+        if (!relativePath.isEmpty())
+            searchPaths << baseDir.absoluteFilePath(relativePath);
+        searchPaths << baseDir.absoluteFilePath("plugins/" + pluginId);
+
+        // 定位 DLL（仅查找文件，不实例化——惰性加载由 PluginManager 负责）
+        QString dllPath;
+        for (const QString& path : searchPaths)
+        {
+            QDir dir(path);
+            if (!dir.exists()) continue;
             QStringList files = dir.entryList(filters, QDir::Files);
-            qDebug() << "  Files found in dir:" << files;
-
-            for (const QString& fileName : files) {
-                QString fullPath = dir.absoluteFilePath(fileName);
-                qDebug() << "  Attempting to load:" << fullPath;
-
-                QPluginLoader loader(fullPath);
-                QObject* instance = loader.instance();
-                if (instance) {
-                    Plugin* plugin = qobject_cast<Plugin*>(instance);
-                    if (plugin) {
-                        qDebug() << "  SUCCESS: Loaded" << plugin->displayName();
-                        manager->registerPlugin(plugin);
-                        loaded = true;
-                        break;
-                    } else {
-                        qWarning() << "  FAILED: File is a Qt plugin but doesn't implement Plugin interface. Check IID!";
-                    }
-                } else {
-                    qDebug() << "  FAILED: loader.instance() returned null. Error:" << loader.errorString();
-                }
+            if (!files.isEmpty())
+            {
+                dllPath = dir.absoluteFilePath(files.first());
+                break;
             }
-            if (loaded) break;
         }
-        
-        if (!loaded) {
-            qWarning() << "  CRITICAL: Could not find or load plugin:" << pluginId;
+
+        if (dllPath.isEmpty())
+        {
+            qWarning() << "CRITICAL: Could not locate plugin:" << pluginId;
+            continue;
         }
+
+        // 读取插件内嵌元数据作为显示名（可选，失败时回退到 config 名称）
+        QPluginLoader probe(dllPath);
+        QJsonObject meta = probe.metaData().value("MetaData").toObject();
+        QString metaName = meta.value("Name").toString();
+        if (!metaName.isEmpty())
+            displayName = metaName;
+
+        qDebug() << "Register available plugin:" << pluginId
+                 << "->" << dllPath;
+        manager->registerAvailable(pluginId, displayName, dllPath);
     }
 }
 
 void PluginLoader::loadDataFromConfig()
 {
-    // 逻辑已整合到 registerAll 中
+    // 元数据已由 registerAll 读取；本方法保留签名兼容
 }

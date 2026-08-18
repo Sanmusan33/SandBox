@@ -4,3 +4,5 @@
 
 Plugins:
     OctreeVisualizer
+    PixelCreator
+    PixelRenderer
